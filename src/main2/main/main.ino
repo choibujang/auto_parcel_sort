@@ -1,6 +1,7 @@
 #include "Queue.h"
 #include "Product.h"
 #include <Stepper.h>
+#include <EEPROM.h>
 
 const int STEP_N1 = 8;
 const int STEP_N2 = 9;
@@ -21,6 +22,7 @@ Stepper stepper(2048, STEP_N4, STEP_N2, STEP_N3, STEP_N1);
 int currStepperPos = 0;
 int absStepperPos = 0;
 unsigned long lastDetectTime = 0;
+unsigned long sorterWaitTime = 0;
 
 void moveToPosition(int absStepperPos) {
     stepper.step(absStepperPos - currStepperPos);
@@ -34,6 +36,15 @@ void setup() {
     stepper.setSpeed(10);
     pinMode(DETECT_PIN, INPUT);
     Serial.println("Setup finished.");
+
+    Product product1(111, 1100000000);
+    Product product2(222, 2600000000);
+    Product product3(333, 4100000000);
+
+    
+    productQueue.enqueue(product1);
+    productQueue.enqueue(product2);
+    productQueue.enqueue(product3);
 }
 /* 0: waiting
    1: get signal
@@ -70,9 +81,14 @@ void loop() {
               Product temp;
               productQueue.dequeue(temp);
               temp.displayProductInfo();
-              sorterStatus = 0;
+              sorterWaitTime = millis();
+              sorterStatus = 3;
             }
           }
+        }
+    } else if (sorterStatus == 3) {
+        if (millis() - sorterWaitTime > 1500) {
+            sorterStatus = 0;
         }
     }
 }
