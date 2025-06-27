@@ -44,13 +44,12 @@ static ParcelSorter parcelSorter(conveyor, sorter, sensor1, sensor2, dest_sensor
 */
 void Application_main();
 
-void HardwareUpdateTask(void *argument);
-void LogicTask(void *argument);
+void hwUpdateEntryFunc(void *argument);
+void logicTaskEntryFunc(void *argument);
 void DWT_Init(void);
 
 extern "C" void Application_main() {
     logger.log("Application_main: System starting...\n");
-    DWT_Init();
 
     /* Create Queues */
     logger.log("Application_main: Creating queues...\n");
@@ -77,12 +76,12 @@ extern "C" void Application_main() {
     const osThreadAttr_t hw_task_attributes = {
       .name = "HardwareUpdate", .stack_size = 512 * 4, .priority = (osPriority_t) osPriorityHigh,
     };
-    hardwareUpdateTaskHandle = osThreadNew(HardwareUpdateTask, NULL, &hw_task_attributes);
+    hardwareUpdateTaskHandle = osThreadNew(hwUpdateEntryFunc, NULL, &hw_task_attributes);
 
     const osThreadAttr_t logic_task_attributes = {
       .name = "LogicTask", .stack_size = 1024 * 4, .priority = (osPriority_t) osPriorityNormal,
     };
-    logicTaskHandle = osThreadNew(LogicTask, NULL, &logic_task_attributes);
+    logicTaskHandle = osThreadNew(logicTaskEntryFunc, NULL, &logic_task_attributes);
     logger.log("Application_main: Tasks created.\n");
 
     // UART DMA Reception
@@ -94,7 +93,7 @@ extern "C" void Application_main() {
 | RTOS Tasks                                                                  |
 +-----------------------------------------------------------------------------+
 */
-void HardwareUpdateTask(void *argument) {
+void hwUpdateEntryFunc(void *argument) {
   uint32_t last_wake_time = osKernelGetTickCount();
   const uint32_t period_ms = 10;
   uint32_t loop_count = 0;
@@ -105,7 +104,7 @@ void HardwareUpdateTask(void *argument) {
     
     // Log every 500ms (10ms * 50 loops) to avoid flooding the console
     if (++loop_count >= 50) {
-        logger.log("HardwareUpdateTask is running...\n");
+        logger.log("hwUpdateEntryFunc is running...\n");
         loop_count = 0;
     }
 
@@ -114,13 +113,13 @@ void HardwareUpdateTask(void *argument) {
   }
 }
 
-void LogicTask(void *argument) {
+void logicTaskEntryFunc(void *argument) {
   Event event;
   char log_msg[64];
   for(;;) {
     osStatus_t status = osMessageQueueGet(eventQueueHandle, &event, NULL, osWaitForever);
     if (status == osOK) {
-	  snprintf(log_msg, sizeof(log_msg), "LogicTask: Handling event type %d\n", static_cast<int>(event.type));
+	  snprintf(log_msg, sizeof(log_msg), "logicTaskEntryFunc: Handling event type %d\n", static_cast<int>(event.type));
 	  logger.log(log_msg);
       parcelSorter.handleEvent(event);
     }
@@ -146,7 +145,3 @@ extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t S
     }
 }
 
-void DWT_Init(void) {
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-}

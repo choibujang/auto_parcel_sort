@@ -8,7 +8,6 @@ from PyQt5.QtCore import QThread, pyqtSignal, QObject, QTimer
 import serial
 import serial.tools.list_ports
 
-# --- Worker for Serial Communication ---
 class SerialWorker(QObject):
     """
     Handles serial communication in a separate thread to prevent GUI freezing.
@@ -25,7 +24,7 @@ class SerialWorker(QObject):
         self.serial_port = None
         self.running = False
         
-        # Possible destinations
+        # Possible parcel destinations
         self.destinations = [0, 1, 2]
 
     def connect(self):
@@ -42,14 +41,10 @@ class SerialWorker(QObject):
             try:
                 if self.serial_port.in_waiting > 0:
                     raw_line = self.serial_port.readline()
-                    # Also strip NULL bytes which are sometimes sent by embedded devices
                     line = raw_line.decode('utf-8').strip('\x00 \t\n\r')
-                    # print(f"Read raw: {repr(raw_line)}, processed: {repr(line)}") # Debug print
                     if line:
-                        # Ignore messages that are likely echoes of what we sent.
                         if line.startswith(("<QR_OK:", "[LOG] Simulator")):
                             continue
-                        # Send all non-empty lines to the main window's log
                         self.message_received.emit(line)
                         if line.startswith("<QR_REQUEST,"):
                             self.process_qr_request(line)
@@ -59,20 +54,17 @@ class SerialWorker(QObject):
             except UnicodeDecodeError:
                 self.log_message.emit("Received undecodable bytes.")
                 pass
-            QThread.msleep(10) # Small sleep to prevent busy-looping
+            QThread.msleep(10)
 
     def process_qr_request(self, request_line):
         try:
-            # Extract ID from "<QR_REQUEST,id>"
             parcel_id_str = request_line.split(',')[1].strip('>')
             parcel_id = int(parcel_id_str)
             
             self.log_message.emit(f"Processing QR request for parcel ID: {parcel_id}")
 
-            # Generate a random destination
             random_dest = random.choice(self.destinations)
             
-            # Format the response to match Arduino's expectation: "<QR_OK:id,dest>"
             response = f"<QR_OK:{parcel_id},{random_dest}>\\n"
             
             self.send(response)
@@ -99,7 +91,6 @@ class SerialWorker(QObject):
         self.finished.emit()
 
 
-# --- Main Application Window ---
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -111,14 +102,12 @@ class MainWindow(QMainWindow):
         self.serial_worker = None
 
     def setupUi(self):
-        # Central Widget and Layouts
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         connection_layout = QHBoxLayout()
         send_qr_layout = QHBoxLayout()
 
-        # Connection controls
         self.ports_combo = QComboBox()
         self.refresh_button = QPushButton("Refresh")
         self.connect_button = QPushButton("Connect")
@@ -131,11 +120,9 @@ class MainWindow(QMainWindow):
         connection_layout.addWidget(self.connect_button)
         connection_layout.addWidget(self.disconnect_button)
         
-        # Log display
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
 
-        # Controls to send QR responses
         self.parcel_id_input = QLineEdit("1")
         self.parcel_id_input.setFixedWidth(50)
         self.send_qr_button = QPushButton("Send QR Response")
@@ -150,7 +137,6 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.log_box)
         main_layout.addLayout(send_qr_layout)
 
-        # Connect signals and slots
         self.refresh_button.clicked.connect(self.populate_ports)
         self.connect_button.clicked.connect(self.connect_serial)
         self.disconnect_button.clicked.connect(self.disconnect_serial)
@@ -172,21 +158,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Port", "Please select a serial port.")
             return
 
-        baudrate = 115200 # Standard baudrate
+        baudrate = 115200
         self.log_message(f"Attempting to connect to {port} at {baudrate} bps...")
 
-        # Setup and start the worker thread
         self.serial_thread = QThread()
         self.serial_worker = SerialWorker(port, baudrate)
         self.serial_worker.moveToThread(self.serial_thread)
         
-        # Connect worker signals to main thread slots
         self.serial_thread.started.connect(self.serial_worker.connect)
         self.serial_worker.message_received.connect(self.handle_message)
         self.serial_worker.log_message.connect(self.log_message)
         self.serial_worker.port_error.connect(self.handle_port_error)
         
-        # Cleanup when thread finishes
         self.serial_worker.finished.connect(self.thread_cleanup)
         self.serial_thread.finished.connect(self.serial_thread.deleteLater)
         
@@ -198,14 +181,13 @@ class MainWindow(QMainWindow):
             self.serial_worker.stop()
         if self.serial_thread:
             self.serial_thread.quit()
-            self.serial_thread.wait() # Wait for thread to finish
+            self.serial_thread.wait()
         self.update_ui_state(connected=False)
 
     def log_message(self, message):
         self.log_box.append(message)
 
     def handle_message(self, message):
-        # This will now be called for every line received from Arduino
         self.log_message(f"Arduino Log: {message}")
 
     def handle_port_error(self, error_message):

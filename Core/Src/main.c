@@ -321,17 +321,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-/*
-void hwUpdateEntryFunc(void *argument)
-{
-  ...
-}
 
-void logicTaskEntryFunc(void *argument)
-{
-  ...
-}
-*/
 /* USER CODE END 4 */
 
 /**
